@@ -1,52 +1,91 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { Embedder } from '../src/lib/embedder.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import {
+  DEFAULT_EMBEDDING_DIMENSIONS,
+  DEFAULT_EMBEDDING_MODEL,
+  Embedder,
+  truncateToTokens,
+} from '../src/lib/embedder.js';
+
+const vector = Array.from({ length: DEFAULT_EMBEDDING_DIMENSIONS }, (_, i) => i / 1000);
 
 describe('Embedder', () => {
-  let embedder: Embedder;
+  beforeEach(() => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
+    vi.stubGlobal('fetch', vi.fn(async (_url, _init) => ({
+      ok: true,
+      json: async () => ({ data: [{ embedding: vector }] }),
+    })));
+  });
 
-  beforeAll(async () => {
-    embedder = new Embedder();
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('requires OPENAI_API_KEY', async () => {
+    vi.stubEnv('OPENAI_API_KEY', '');
+    const embedder = new Embedder();
+    await expect(embedder.init()).rejects.toThrow('OPENAI_API_KEY is required');
+  });
+
+  it('requests text-embedding-3-small and returns a 1536-dimensional embedding', async () => {
+    const embedder = new Embedder();
     await embedder.init();
-  }, 120000);
-
-  afterAll(async () => {
-    await embedder.dispose();
-  });
-
-  it('generates a 384-dimensional embedding', async () => {
     const embedding = await embedder.embed('Hello world');
+
     expect(embedding).toBeInstanceOf(Float32Array);
-    expect(embedding.length).toBe(384);
+    expect(embedding.length).toBe(DEFAULT_EMBEDDING_DIMENSIONS);
+    expect(fetch).toHaveBeenCalledOnce();
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      model: DEFAULT_EMBEDDING_MODEL,
+      input: 'Hello world',
+    });
   });
 
-  it('generates similar embeddings for similar text', async () => {
-    const a = await embedder.embed('knowledge graph traversal');
-    const b = await embedder.embed('graph traversal in knowledge bases');
-    const c = await embedder.embed('chocolate cake recipe');
-    const simAB = cosineSimilarity(a, b);
-    const simAC = cosineSimilarity(a, c);
-    expect(simAB).toBeGreaterThan(simAC);
+  it('surfaces OpenAI API errors clearly', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      json: async () => ({ error: { message: 'bad key' } }),
+    })));
+    const embedder = new Embedder();
+    await embedder.init();
+
+    await expect(embedder.embed('Hello')).rejects.toThrow(
+      'OpenAI embeddings request failed: bad key'
+    );
   });
 
-  it('builds embedding text from title, tags, and first paragraph', () => {
+  it('builds embedding text from title, tags, and body capped to 256 tokens', () => {
     const text = Embedder.buildEmbeddingText(
       'Widget Theory',
       ['concept', 'framework'],
-      'A theoretical framework for understanding component interactions.\n\nMore details here.',
+      Array.from({ length: 500 }, (_, i) => `detail${i}`).join(' '),
     );
+
     expect(text).toContain('Widget Theory');
     expect(text).toContain('concept');
-    expect(text).toContain('theoretical framework');
-    expect(text).not.toContain('More details here');
+    expect(text).not.toContain('detail499');
+    expect(tokenCount(text)).toBeLessThanOrEqual(256);
+  });
+
+  it('allows explicit token caps for tests and future tuning', () => {
+    const text = truncateToTokens('alpha beta gamma delta epsilon', 3);
+    expect(tokenCount(text)).toBeLessThanOrEqual(3);
   });
 });
 
-function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  let dot = 0, normA = 0, normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
+function tokenCount(text: string): number {
+  // Reuse production behavior through truncateToTokens: increasing cap until
+  // unchanged is unnecessary here; this helper only checks exact short caps.
+  let low = 1;
+  let high = 512;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (truncateToTokens(text, mid) === text) high = mid;
+    else low = mid + 1;
   }
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+  return low;
 }

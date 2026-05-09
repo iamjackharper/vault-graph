@@ -48,7 +48,7 @@ export function buildStemLookup(allPaths: string[]): Map<string, string[]> {
 
 /**
  * Resolve a wiki link reference to a vault-relative path.
- * Returns null for unresolvable links (these become stub nodes).
+ * Returns null for unresolvable links.
  */
 export function resolveLink(
   raw: string,
@@ -66,7 +66,7 @@ export function resolveLink(
   const stem = raw.split('/').pop()!;
   const candidates = stemLookup.get(stem);
   if (!candidates || candidates.length === 0) {
-    return null;  // stub node
+    return null;
   }
   if (candidates.length === 1) {
     return candidates[0];

@@ -75,6 +75,56 @@ describe('Store', () => {
     expect(results[0].nodeId).toBe('test.md');
   });
 
+  it('stores and searches 1536-dimensional embeddings', () => {
+    store.upsertNode({
+      id: 'test.md',
+      title: 'Widget Theory',
+      content: 'A framework for understanding component interactions',
+      frontmatter: {},
+    });
+    const embedding = new Float32Array(1536).fill(0);
+    embedding[0] = 1;
+    store.upsertEmbedding('test.md', embedding);
+
+    const results = store.searchVector(embedding, 1);
+    expect(results).toHaveLength(1);
+    expect(results[0].nodeId).toBe('test.md');
+  });
+
+  it('stores, searches, and deletes chunk embeddings', () => {
+    const chunk = {
+      id: 'raw/a.md#chunk-0',
+      documentId: 'raw/a.md',
+      sourceKind: 'raw' as const,
+      headingPath: ['Call'],
+      chunkIndex: 0,
+      startToken: 0,
+      endToken: 10,
+      text: 'Zuhair discussed OpenAI and model quality.',
+      mtime: 1000,
+    };
+    const embedding = new Float32Array(1536).fill(0);
+    embedding[0] = 1;
+
+    store.upsertChunk(chunk);
+    store.upsertChunkEmbedding(chunk.id, embedding);
+
+    const results = store.searchChunksVector(embedding, { limit: 1, sourceKind: 'raw' });
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      chunkId: chunk.id,
+      documentId: 'raw/a.md',
+      sourceKind: 'raw',
+      headingPath: ['Call'],
+    });
+    expect(store.getChunkDocumentIds()).toContain('raw/a.md');
+    expect(store.getChunkDocumentMtime('raw/a.md')).toBe(1000);
+
+    store.deleteChunksForDocument('raw/a.md');
+    expect(store.getChunkDocumentIds()).not.toContain('raw/a.md');
+    expect(store.searchChunksVector(embedding, { limit: 1 })).toHaveLength(0);
+  });
+
   it('tracks sync state', () => {
     store.upsertSync('test.md', 1000);
     expect(store.getSyncMtime('test.md')).toBe(1000);

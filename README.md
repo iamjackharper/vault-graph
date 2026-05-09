@@ -1,12 +1,12 @@
 # knowledge-graph
 
-Query and traverse an Obsidian vault as a knowledge graph. Semantic search, path finding, community detection, and graph analysis — all local, no cloud APIs.
+Query and traverse the curated `wiki/` section of an Obsidian vault as a knowledge graph. Semantic search uses OpenAI embeddings; graph traversal and storage stay local.
 
 ## What it does
 
-Parses an Obsidian vault into an untyped graph (files = nodes, wiki links = edges), indexes it into SQLite with vector embeddings and full-text search, and exposes 10 operations via CLI and MCP server.
+Parses `wiki/**/*.md` notes from an Obsidian vault into an untyped graph (files = nodes, wiki links = edges), indexes them into SQLite with vector embeddings and full-text search, and exposes operations via CLI and MCP server. `inbox/` and root-level markdown files are intentionally excluded. `raw/**/*.md` stays out of the graph but is indexed as semantic chunks.
 
-**Search:** Semantic search via local embeddings, full-text keyword search via FTS5.
+**Search:** Document semantic search via OpenAI `text-embedding-3-small`, full-text keyword search via FTS5, and chunk search over `raw/**/*.md` plus `wiki/sources/**/*.md`.
 
 **Traverse:** Find paths between nodes, shared connections, N-hop neighborhoods, local subgraphs.
 
@@ -24,17 +24,20 @@ Set your vault path:
 
 ```bash
 export KG_VAULT_PATH=/path/to/your/obsidian/vault
+export OPENAI_API_KEY=sk-...
 ```
 
 Optionally set the data directory (defaults to `~/.local/share/knowledge-graph`):
 
 ```bash
 export KG_DATA_DIR=/path/to/data
+export KG_EMBEDDING_MODEL=text-embedding-3-small
+export KG_EMBEDDING_MAX_TOKENS=256
 ```
 
 ## CLI usage
 
-Index your vault (first run downloads a 22MB embedding model):
+Index the curated `wiki/` notes in your vault:
 
 ```bash
 npx tsx src/cli/index.ts index
@@ -54,6 +57,11 @@ npx tsx src/cli/index.ts search "distributed systems framework"
 
 # Full-text keyword search
 npx tsx src/cli/index.ts search "distributed systems" --fulltext
+
+# Chunk-level passage search over raw files and wiki sources
+npx tsx src/cli/index.ts chunks "what does zuhair think of openai"
+npx tsx src/cli/index.ts chunks "openai" --source raw
+npx tsx src/cli/index.ts chunks "openai" --document raw/2026/foo.md
 
 # Find paths between two nodes
 npx tsx src/cli/index.ts paths "Alice Smith" "Widget Theory"
@@ -89,11 +97,12 @@ No LLM inside the tool — the agent does the reasoning, the tool provides the d
 
 ## How it works
 
-- **Parser:** Walks the vault for `.md` files, extracts YAML frontmatter (via gray-matter), wiki links, inline `#tags`, and enclosing paragraphs as edge context. Handles malformed YAML gracefully.
-- **Store:** SQLite with sqlite-vec for vector search and FTS5 for full-text search. Single file database.
-- **Embedder:** `Xenova/all-MiniLM-L6-v2` via @huggingface/transformers. Runs locally, 22MB quantized model, 384-dimensional embeddings computed from title + tags + first paragraph.
+- **Parser:** Walks only `wiki/**/*.md`, extracts YAML frontmatter (via gray-matter), wiki links, inline `#tags`, and enclosing paragraphs as edge context. Handles malformed YAML gracefully.
+- **Store:** SQLite with sqlite-vec for document and chunk vector search, plus FTS5 for full-text document search. Single file database.
+- **Embedder:** OpenAI `text-embedding-3-small`, 1536-dimensional embeddings. Embedding input is title + tags + note body capped to 256 `cl100k_base` tokens. FTS still indexes the full wiki note content.
+- **Chunks:** `raw/**/*.md` and `wiki/sources/**/*.md` are chunked into 500-token passages with 80-token overlap. Chunks keep document ID and heading path, but never become graph nodes.
 - **Graph:** graphology for in-memory graph algorithms — Louvain community detection, betweenness centrality, PageRank (with degree centrality fallback for disconnected graphs), BFS traversal, all-simple-paths via DFS.
-- **Indexing:** Incremental by default — tracks file mtimes, only reprocesses changed files. Community detection re-runs on the full graph. Use `--force` for a full rebuild.
+- **Indexing:** Incremental by default — tracks file mtimes, only reprocesses changed files and changed chunks. Community detection re-runs on the full graph. Use `--force` for a full rebuild.
 
 ## Tech stack
 
@@ -103,9 +112,9 @@ No LLM inside the tool — the agent does the reasoning, the tool provides the d
 | Persistence | better-sqlite3 |
 | Vector search | sqlite-vec |
 | Full-text search | SQLite FTS5 |
-| Embeddings | @huggingface/transformers |
+| Embeddings | OpenAI embeddings API + js-tiktoken |
 | MCP server | @modelcontextprotocol/sdk |
-| Tests | vitest (76 tests) |
+| Tests | vitest |
 
 ## Known quirks
 

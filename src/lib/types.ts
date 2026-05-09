@@ -33,6 +33,30 @@ export interface SearchResult {
   excerpt: string;
 }
 
+export type ChunkSourceKind = 'raw' | 'wiki-sources';
+
+export interface ParsedChunk {
+  id: string;
+  documentId: string;
+  sourceKind: ChunkSourceKind;
+  headingPath: string[];
+  chunkIndex: number;
+  startToken: number;
+  endToken: number;
+  text: string;
+  mtime: number;
+}
+
+export interface ChunkSearchResult {
+  chunkId: string;
+  documentId: string;
+  sourceKind: ChunkSourceKind;
+  headingPath: string[];
+  chunkIndex: number;
+  score: number;
+  text: string;
+}
+
 export interface PathResult {
   nodes: string[];       // ordered node IDs along the path
   edges: Array<{         // edge context for each hop

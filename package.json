@@ -12,7 +12,6 @@
     "kg": "dist/cli/index.js"
   },
   "dependencies": {
-    "@huggingface/transformers": "^3.8.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "better-sqlite3": "^12.8.0",
     "commander": "^14.0.3",
@@ -24,6 +23,7 @@
     "graphology-traversal": "^0.3.1",
     "graphology-types": "^0.24.8",
     "gray-matter": "^4.0.3",
+    "js-tiktoken": "^1.0.21",
     "sqlite-vec": "^0.1.7",
     "zod": "^4.3.6"
   },

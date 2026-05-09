@@ -1,9 +1,24 @@
-import Graph from 'graphology';
-import louvain from 'graphology-communities-louvain';
-import betweennessCentrality from 'graphology-metrics/centrality/betweenness.js';
-import pagerank from 'graphology-metrics/centrality/pagerank.js';
+import GraphConstructor from 'graphology';
+import louvainModule from 'graphology-communities-louvain';
+import betweennessCentralityModule from 'graphology-metrics/centrality/betweenness.js';
+import pagerankModule from 'graphology-metrics/centrality/pagerank.js';
+import type { AbstractGraph as Graph } from 'graphology-types';
 import type { Store } from './store.js';
 import type { PathResult, SubgraphResult, Community } from './types.js';
+
+type GraphCtor = new (options?: { multi?: boolean; type?: 'directed' | 'undirected' | 'mixed' }) => Graph;
+const GraphClass = GraphConstructor as unknown as GraphCtor;
+const louvain = louvainModule as unknown as (
+  graph: Graph,
+  options?: { resolution?: number },
+) => Record<string, number>;
+const betweennessCentrality = betweennessCentralityModule as unknown as (
+  graph: Graph,
+) => Record<string, number>;
+const pagerank = pagerankModule as unknown as (
+  graph: Graph,
+  options?: { maxIterations?: number; tolerance?: number },
+) => Record<string, number>;
 
 /**
  * Run PageRank, filtering out isolated nodes that prevent convergence.
@@ -13,15 +28,15 @@ function safeRank(graph: Graph): Record<string, number> {
   const scores: Record<string, number> = {};
 
   // Separate connected nodes from isolates
-  const connected = new Graph({ multi: false, type: 'undirected' });
-  graph.forEachNode((id, attrs) => {
+  const connected = new GraphClass({ multi: false, type: 'undirected' });
+  graph.forEachNode((id: string, attrs: Record<string, unknown>) => {
     if (graph.degree(id) > 0) {
       connected.addNode(id, attrs);
     } else {
       scores[id] = 0;
     }
   });
-  graph.forEachEdge((_edge, _attrs, source, target) => {
+  graph.forEachEdge((_edge: string, _attrs: Record<string, unknown>, source: string, target: string) => {
     if (connected.hasNode(source) && connected.hasNode(target) && !connected.hasEdge(source, target)) {
       connected.addEdge(source, target);
     }
@@ -53,7 +68,7 @@ export class KnowledgeGraph {
   }
 
   static fromStore(store: Store): KnowledgeGraph {
-    const graph = new Graph({ multi: true, type: 'directed' });
+    const graph = new GraphClass({ multi: true, type: 'directed' });
     for (const id of store.allNodeIds()) {
       const node = store.getNode(id);
       if (node) graph.addNode(id, { title: node.title });
@@ -278,9 +293,9 @@ export class KnowledgeGraph {
   }
 
   private toUndirected(): Graph {
-    const undirected = new Graph({ multi: false, type: 'undirected' });
-    this.graph.forEachNode((id, attrs) => undirected.addNode(id, attrs));
-    this.graph.forEachEdge((_edge, _attrs, source, target) => {
+    const undirected = new GraphClass({ multi: false, type: 'undirected' });
+    this.graph.forEachNode((id: string, attrs: Record<string, unknown>) => undirected.addNode(id, attrs));
+    this.graph.forEachEdge((_edge: string, _attrs: Record<string, unknown>, source: string, target: string) => {
       if (!undirected.hasEdge(source, target)) undirected.addEdge(source, target);
     });
     return undirected;

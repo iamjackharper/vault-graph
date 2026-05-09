@@ -8,6 +8,7 @@ import {
 } from './wiki-links.js';
 import type { ParsedNode, ParsedEdge } from './types.js';
 
+const INDEXED_ROOT = 'wiki';
 const EXCLUDED_DIRS = new Set(['.obsidian', '_FileOrganizer2000', 'attachments']);
 
 export interface ParseResult {
@@ -57,10 +58,12 @@ export async function parseVault(vaultPath: string): Promise<ParseResult> {
 
     for (const link of links) {
       const targetId = resolveLink(link.raw, stemLookup, allPathsSet);
-      const resolvedTarget = targetId ?? `_stub/${link.raw}.md`;
-
       if (!targetId) {
-        stubIds.add(resolvedTarget);
+        // V1 indexes only curated wiki notes. Links to inbox/raw/root or
+        // otherwise unresolved targets are left out of the operational graph.
+        // They can be surfaced in a later raw/chunking pass without creating
+        // synthetic source-of-truth nodes.
+        continue;
       }
 
       const context = paragraphs.find(p => p.includes(`[[${link.raw}`))
@@ -69,7 +72,7 @@ export async function parseVault(vaultPath: string): Promise<ParseResult> {
 
       edges.push({
         sourceId: relPath,
-        targetId: resolvedTarget,
+        targetId,
         context: context.trim(),
       });
     }
@@ -94,7 +97,10 @@ async function collectMarkdownFiles(
 ): Promise<string[]> {
   const results: string[] = [];
   const dirPath = join(vaultPath, subdir);
-  const entries = await readdir(dirPath, { withFileTypes: true });
+  const entries = await readdir(dirPath, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT' && subdir === INDEXED_ROOT) return [];
+    throw error;
+  });
 
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue;
@@ -102,8 +108,9 @@ async function collectMarkdownFiles(
 
     const relPath = subdir ? `${subdir}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
+      if (!subdir && entry.name !== INDEXED_ROOT) continue;
       results.push(...await collectMarkdownFiles(vaultPath, relPath));
-    } else if (entry.name.endsWith('.md')) {
+    } else if (subdir.startsWith(INDEXED_ROOT) && entry.name.endsWith('.md')) {
       results.push(relPath);
     }
   }

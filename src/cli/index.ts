@@ -7,6 +7,7 @@ import { IndexPipeline } from '../lib/index-pipeline.js';
 import { KnowledgeGraph } from '../lib/graph.js';
 import { Search } from '../lib/search.js';
 import { resolveNodeName } from '../lib/resolve.js';
+import type { ChunkSourceKind } from '../lib/types.js';
 
 const program = new Command();
 
@@ -48,6 +49,22 @@ function requireSingleMatch(name: string, store: Store): string {
   return matches[0].nodeId;
 }
 
+function resolveChunkDocument(document: string | undefined, store: Store): string | undefined {
+  if (!document) return undefined;
+  if (document.startsWith('raw/') || document.startsWith('wiki/sources/')) {
+    return document.endsWith('.md') ? document : `${document}.md`;
+  }
+  if (store.getNode(document)) return document;
+  return requireSingleMatch(document, store);
+}
+
+function parseChunkSource(source: string | undefined): ChunkSourceKind | undefined {
+  if (!source || source === 'all') return undefined;
+  if (source === 'raw' || source === 'wiki-sources') return source;
+  console.error(`Invalid source "${source}". Use one of: all, raw, wiki-sources.`);
+  process.exit(1);
+}
+
 program
   .command('index')
   .description('Parse vault and build/update the knowledge graph')
@@ -59,6 +76,7 @@ program
     const store = new Store(config.dbPath);
     if (opts.force) {
       store.db.prepare('DELETE FROM sync').run();
+      store.clearChunks();
     }
     const embedder = new Embedder();
     await embedder.init();
@@ -136,6 +154,27 @@ program
       output(results);
       await embedder.dispose();
     }
+    store.close();
+  });
+
+program
+  .command('chunks <query>')
+  .description('Search chunk-level passages from raw files and wiki sources')
+  .option('--limit <n>', 'Max results', '10')
+  .option('--source <source>', 'Source filter: all, raw, or wiki-sources', 'all')
+  .option('--document <path-or-node>', 'Restrict to a raw path or wiki source node')
+  .action(async (query, opts) => {
+    const store = getStore();
+    const embedder = new Embedder();
+    await embedder.init();
+    const search = new Search(store, embedder);
+    const results = await search.chunks(query, {
+      limit: parseInt(opts.limit),
+      sourceKind: parseChunkSource(opts.source),
+      documentId: resolveChunkDocument(opts.document, store),
+    });
+    output(results);
+    await embedder.dispose();
     store.close();
   });
 

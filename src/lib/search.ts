@@ -1,6 +1,6 @@
 import type { Store } from './store.js';
 import type { Embedder } from './embedder.js';
-import type { SearchResult } from './types.js';
+import type { ChunkSearchResult, ChunkSourceKind, SearchResult } from './types.js';
 
 export class Search {
   constructor(
@@ -15,5 +15,13 @@ export class Search {
 
   fulltext(query: string, limit = 20): SearchResult[] {
     return this.store.searchFullText(query).slice(0, limit);
+  }
+
+  async chunks(
+    query: string,
+    options: { limit?: number; sourceKind?: ChunkSourceKind; documentId?: string } = {},
+  ): Promise<ChunkSearchResult[]> {
+    const queryEmbedding = await this.embedder.embed(query);
+    return this.store.searchChunksVector(queryEmbedding, options);
   }
 }

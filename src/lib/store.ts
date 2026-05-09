@@ -1,6 +1,15 @@
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
-import type { ParsedNode, ParsedEdge, SearchResult } from './types.js';
+import type {
+  ChunkSearchResult,
+  ChunkSourceKind,
+  ParsedChunk,
+  ParsedEdge,
+  ParsedNode,
+  SearchResult,
+} from './types.js';
+
+const EMBEDDING_DIMENSIONS = 1536;
 
 export class Store {
   db: Database.Database;
@@ -44,12 +53,46 @@ export class Store {
         indexed_at INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS chunks (
+        id TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL,
+        source_kind TEXT NOT NULL,
+        heading_path TEXT NOT NULL DEFAULT '[]',
+        chunk_index INTEGER NOT NULL,
+        start_token INTEGER NOT NULL,
+        end_token INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        mtime INTEGER NOT NULL,
+        indexed_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks(document_id);
+      CREATE INDEX IF NOT EXISTS idx_chunks_source_kind ON chunks(source_kind);
+
       CREATE VIRTUAL TABLE IF NOT EXISTS nodes_fts
         USING fts5(title, content, content='nodes', content_rowid='rowid');
 
       CREATE VIRTUAL TABLE IF NOT EXISTS nodes_vec
-        USING vec0(embedding float[384]);
+        USING vec0(embedding float[1536]);
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec
+        USING vec0(embedding float[1536]);
     `);
+    this.ensureVectorSchema('nodes_vec');
+    this.ensureVectorSchema('chunks_vec');
+  }
+
+  private ensureVectorSchema(tableName: string): void {
+    const row = this.db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name = ?"
+    ).get(tableName) as { sql: string } | undefined;
+
+    if (row && !row.sql.includes(`float[${EMBEDDING_DIMENSIONS}]`)) {
+      this.db.prepare(`DROP TABLE ${tableName}`).run();
+      this.db.prepare(
+        `CREATE VIRTUAL TABLE ${tableName} USING vec0(embedding float[${EMBEDDING_DIMENSIONS}])`
+      ).run();
+    }
   }
 
   upsertNode(node: ParsedNode): void {
@@ -230,6 +273,120 @@ export class Store {
       score: 1 - r.distance,
       excerpt: firstParagraph(r.content ?? '', 200),
     }));
+  }
+
+  deleteChunksForDocument(documentId: string): void {
+    const rows = this.db.prepare(
+      'SELECT rowid FROM chunks WHERE document_id = ?'
+    ).all(documentId) as Array<{ rowid: number }>;
+    for (const row of rows) {
+      this.db.prepare('DELETE FROM chunks_vec WHERE rowid = ?').run(BigInt(row.rowid));
+    }
+    this.db.prepare('DELETE FROM chunks WHERE document_id = ?').run(documentId);
+  }
+
+  clearChunks(): void {
+    this.db.prepare('DELETE FROM chunks_vec').run();
+    this.db.prepare('DELETE FROM chunks').run();
+  }
+
+  upsertChunk(chunk: ParsedChunk): void {
+    const existing = this.db.prepare(
+      'SELECT rowid FROM chunks WHERE id = ?'
+    ).get(chunk.id) as { rowid: number } | undefined;
+    if (existing) {
+      this.db.prepare('DELETE FROM chunks_vec WHERE rowid = ?').run(BigInt(existing.rowid));
+    }
+
+    this.db.prepare(`
+      INSERT INTO chunks (
+        id, document_id, source_kind, heading_path, chunk_index,
+        start_token, end_token, text, mtime, indexed_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        document_id = excluded.document_id,
+        source_kind = excluded.source_kind,
+        heading_path = excluded.heading_path,
+        chunk_index = excluded.chunk_index,
+        start_token = excluded.start_token,
+        end_token = excluded.end_token,
+        text = excluded.text,
+        mtime = excluded.mtime,
+        indexed_at = excluded.indexed_at
+    `).run(
+      chunk.id,
+      chunk.documentId,
+      chunk.sourceKind,
+      JSON.stringify(chunk.headingPath),
+      chunk.chunkIndex,
+      chunk.startToken,
+      chunk.endToken,
+      chunk.text,
+      chunk.mtime,
+      Date.now(),
+    );
+  }
+
+  upsertChunkEmbedding(chunkId: string, embedding: Float32Array): void {
+    const chunk = this.db.prepare(
+      'SELECT rowid FROM chunks WHERE id = ?'
+    ).get(chunkId) as { rowid: number } | undefined;
+    if (!chunk) return;
+    this.db.prepare('DELETE FROM chunks_vec WHERE rowid = ?').run(BigInt(chunk.rowid));
+    this.db.prepare(
+      'INSERT INTO chunks_vec(rowid, embedding) VALUES (?, ?)'
+    ).run(BigInt(chunk.rowid), Buffer.from(embedding.buffer));
+  }
+
+  searchChunksVector(
+    embedding: Float32Array,
+    options: { limit?: number; sourceKind?: ChunkSourceKind; documentId?: string } = {},
+  ): ChunkSearchResult[] {
+    const limit = options.limit ?? 20;
+    const k = options.sourceKind || options.documentId ? Math.max(limit * 20, limit) : limit;
+    const filters: string[] = [];
+    const params: unknown[] = [Buffer.from(embedding.buffer), k];
+    if (options.sourceKind) {
+      filters.push('c.source_kind = ?');
+      params.push(options.sourceKind);
+    }
+    if (options.documentId) {
+      filters.push('c.document_id = ?');
+      params.push(options.documentId);
+    }
+    const where = filters.length > 0 ? `AND ${filters.join(' AND ')}` : '';
+    return this.db.prepare(`
+      SELECT v.distance, c.id, c.document_id, c.source_kind, c.heading_path,
+        c.chunk_index, c.text
+      FROM chunks_vec v
+      JOIN chunks c ON c.rowid = v.rowid
+      WHERE embedding MATCH ? AND k = ?
+      ${where}
+      ORDER BY distance
+      LIMIT ${limit}
+    `).all(...params).map((r: any) => ({
+      chunkId: r.id,
+      documentId: r.document_id,
+      sourceKind: r.source_kind,
+      headingPath: JSON.parse(r.heading_path),
+      chunkIndex: r.chunk_index,
+      score: 1 - r.distance,
+      text: r.text,
+    }));
+  }
+
+  getChunkDocumentIds(): Set<string> {
+    return new Set(
+      this.db.prepare('SELECT DISTINCT document_id FROM chunks').all().map((r: any) => r.document_id)
+    );
+  }
+
+  getChunkDocumentMtime(documentId: string): number | undefined {
+    const row = this.db.prepare(
+      'SELECT MAX(mtime) as mtime FROM chunks WHERE document_id = ?'
+    ).get(documentId) as { mtime: number | null } | undefined;
+    return row?.mtime ?? undefined;
   }
 
   upsertSync(path: string, mtime: number): void {

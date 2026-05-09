@@ -65,7 +65,7 @@ describe('resolveLink', () => {
     expect(resolveLink('People/Bob Jones', lookup)).toBe('People/Bob Jones.md');
   });
 
-  it('returns null for unresolvable links (stub nodes)', () => {
+  it('returns null for unresolvable links', () => {
     expect(resolveLink('Nonexistent Page', lookup)).toBeNull();
   });
 });
