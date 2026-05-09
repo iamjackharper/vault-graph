@@ -21,7 +21,7 @@ const writer = new VaultWriter(config.vaultPath, store);
 let embedderReady = false;
 
 const server = new McpServer({
-  name: 'knowledge-graph',
+  name: 'vault-graph',
   version: '0.1.0',
 });
 

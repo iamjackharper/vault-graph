@@ -25,12 +25,12 @@ describe('resolveConfig', () => {
     expect(config.vaultPath).toBe('/tmp/cli-vault');
   });
 
-  it('defaults data dir to XDG_DATA_HOME/knowledge-graph', () => {
+  it('defaults data dir to XDG_DATA_HOME/vault-graph', () => {
     process.env.KG_VAULT_PATH = '/tmp/vault';
     process.env.XDG_DATA_HOME = '/tmp/xdg';
     delete process.env.KG_DATA_DIR;
     const config = resolveConfig({});
-    expect(config.dataDir).toBe('/tmp/xdg/knowledge-graph');
+    expect(config.dataDir).toBe('/tmp/xdg/vault-graph');
   });
 
   it('reads data dir from KG_DATA_DIR env var', () => {
@@ -40,11 +40,11 @@ describe('resolveConfig', () => {
     expect(config.dataDir).toBe('/tmp/custom-data');
   });
 
-  it('falls back to ~/.local/share/knowledge-graph when XDG not set', () => {
+  it('falls back to ~/.local/share/vault-graph when XDG not set', () => {
     process.env.KG_VAULT_PATH = '/tmp/vault';
     delete process.env.XDG_DATA_HOME;
     delete process.env.KG_DATA_DIR;
     const config = resolveConfig({});
-    expect(config.dataDir).toContain('.local/share/knowledge-graph');
+    expect(config.dataDir).toContain('.local/share/vault-graph');
   });
 });

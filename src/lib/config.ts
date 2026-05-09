@@ -27,7 +27,7 @@ export function resolveConfig(overrides: ConfigOverrides): KGConfig {
 
   const dataDir = overrides.dataDir
     ?? process.env.KG_DATA_DIR
-    ?? join(xdgData, 'knowledge-graph');
+    ?? join(xdgData, 'vault-graph');
 
   return {
     vaultPath,

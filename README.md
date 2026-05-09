@@ -1,4 +1,4 @@
-# knowledge-graph
+# vault-graph
 
 Query and traverse the curated `wiki/` section of an Obsidian vault as a knowledge graph. Semantic search uses OpenAI embeddings; graph traversal and storage stay local.
 
@@ -15,8 +15,8 @@ Parses `wiki/**/*.md` notes from an Obsidian vault into an untyped graph (files 
 ## Install
 
 ```bash
-git clone https://github.com/obra/knowledge-graph.git
-cd knowledge-graph
+git clone https://github.com/iamjackharper/vault-graph.git
+cd vault-graph
 npm install
 ```
 
@@ -27,7 +27,7 @@ export KG_VAULT_PATH=/path/to/your/obsidian/vault
 export OPENAI_API_KEY=sk-...
 ```
 
-Optionally set the data directory (defaults to `~/.local/share/knowledge-graph`):
+Optionally set the data directory (defaults to `~/.local/share/vault-graph`):
 
 ```bash
 export KG_DATA_DIR=/path/to/data
@@ -86,14 +86,6 @@ npx tsx src/cli/index.ts central --limit 10
 ```
 
 All commands return JSON. Names are fuzzy-matched (title, aliases, substring). You can also pass full node IDs (file paths).
-
-## Claude Code plugin
-
-This repo is also a Claude Code plugin. Add it to your plugins and the MCP server starts automatically, exposing all 10 operations as tools (`kg_node`, `kg_search`, `kg_paths`, etc.).
-
-The `prove-claim` skill teaches the agent a structured workflow for investigating claims: decompose into entities, find them via search, trace connections via path traversal, read the evidence, assess and report with citations.
-
-No LLM inside the tool — the agent does the reasoning, the tool provides the data infrastructure.
 
 ## How it works
 
