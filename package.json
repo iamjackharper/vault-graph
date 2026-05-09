@@ -9,7 +9,7 @@
     "cli": "tsx src/cli/index.ts"
   },
   "bin": {
-    "kg": "dist/cli/index.js"
+    "vault-graph": "dist/cli/index.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

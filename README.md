@@ -37,52 +37,53 @@ export KG_EMBEDDING_MAX_TOKENS=256
 
 ## CLI usage
 
-Index the curated `wiki/` notes in your vault:
+Build the CLI and index the curated `wiki/` notes in your vault:
 
 ```bash
-npx tsx src/cli/index.ts index
+npm run build
+vault-graph index
 ```
 
 Then query:
 
 ```bash
 # Look up a node (brief mode — metadata + connections)
-npx tsx src/cli/index.ts node "Alice Smith"
+vault-graph node "Alice Smith"
 
 # Full content + edge context
-npx tsx src/cli/index.ts node "Alice Smith" --full
+vault-graph node "Alice Smith" --full
 
 # Semantic search
-npx tsx src/cli/index.ts search "distributed systems framework"
+vault-graph search "distributed systems framework"
 
 # Full-text keyword search
-npx tsx src/cli/index.ts search "distributed systems" --fulltext
+vault-graph search "distributed systems" --fulltext
 
 # Chunk-level passage search over raw files and wiki sources
-npx tsx src/cli/index.ts chunks "what does zuhair think of openai"
-npx tsx src/cli/index.ts chunks "openai" --source raw
-npx tsx src/cli/index.ts chunks "openai" --document raw/2026/foo.md
+vault-graph chunks "distributed systems architecture"
+vault-graph chunks "distributed systems" --source raw
+vault-graph chunks "distributed systems" --document raw/2026/foo.md
 
 # Find paths between two nodes
-npx tsx src/cli/index.ts paths "Alice Smith" "Widget Theory"
+vault-graph paths "Alice Smith" "Widget Theory"
 
 # Shared connections
-npx tsx src/cli/index.ts common "Alice Smith" "Bob Jones"
+vault-graph common "Alice Smith" "Bob Jones"
 
 # Local neighborhood
-npx tsx src/cli/index.ts neighbors "Alice Smith" --depth 2
+vault-graph neighbors "Alice Smith" --depth 2
 
 # Subgraph extraction
-npx tsx src/cli/index.ts subgraph "Widget Theory" --depth 1
+vault-graph subgraph "Widget Theory" --depth 1
 
 # Community detection
-npx tsx src/cli/index.ts communities
+vault-graph communities
 
 # Bridge nodes (connectors between clusters)
-npx tsx src/cli/index.ts bridges --limit 10
+vault-graph bridges --limit 10
 
 # Central nodes (PageRank)
-npx tsx src/cli/index.ts central --limit 10
+vault-graph central --limit 10
 ```
 
 All commands return JSON. Names are fuzzy-matched (title, aliases, substring). You can also pass full node IDs (file paths).

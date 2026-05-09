@@ -12,7 +12,7 @@ import type { ChunkSourceKind } from '../lib/types.js';
 const program = new Command();
 
 program
-  .name('kg')
+  .name('vault-graph')
   .description('Knowledge graph tools for Obsidian vaults')
   .version('0.1.0')
   .option('--vault-path <path>', 'Path to Obsidian vault')
