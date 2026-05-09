@@ -48,33 +48,33 @@ Then query:
 
 ```bash
 # Look up a node (brief mode — metadata + connections)
-vault-graph node "Alice Smith"
+vault-graph node "Mr. House"
 
 # Full content + edge context
-vault-graph node "Alice Smith" --full
+vault-graph node "Yes Man" --full
 
 # Semantic search
-vault-graph search "distributed systems framework"
+vault-graph search "independent vegas strategy"
 
-# Full-text keyword search
-vault-graph search "distributed systems" --fulltext
+# Full-text keyword search (SQLite FTS5 query language)
+vault-graph search '"platinum chip" OR securitron' --fulltext
 
 # Chunk-level passage search over raw files and wiki sources
-vault-graph chunks "distributed systems architecture"
-vault-graph chunks "distributed systems" --source raw
-vault-graph chunks "distributed systems" --document raw/2026/foo.md
+vault-graph chunks "hoover dam battle plan"
+vault-graph chunks "legion" --source raw
+vault-graph chunks "benny" --document raw/interviews/benny-notes.md
 
 # Find paths between two nodes
-vault-graph paths "Alice Smith" "Widget Theory"
+vault-graph paths "Courier Six" "Caesar"
 
 # Shared connections
-vault-graph common "Alice Smith" "Bob Jones"
+vault-graph common "Mr. House" "NCR"
 
 # Local neighborhood
-vault-graph neighbors "Alice Smith" --depth 2
+vault-graph neighbors "New Vegas Strip" --depth 2
 
 # Subgraph extraction
-vault-graph subgraph "Widget Theory" --depth 1
+vault-graph subgraph "Hoover Dam" --depth 1
 
 # Community detection
 vault-graph communities
@@ -87,6 +87,8 @@ vault-graph central --limit 10
 ```
 
 All commands return JSON. Names are fuzzy-matched (title, aliases, substring). You can also pass full node IDs (file paths).
+
+`vault-graph search ... --fulltext` uses SQLite FTS5 query syntax, not regex syntax. Use operators like `OR`, quoted phrases like `"platinum chip"`, and other FTS5 query forms. Do not use regex alternation such as `foo|bar`.
 
 ## How it works
 

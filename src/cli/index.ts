@@ -139,7 +139,7 @@ program
 program
   .command('search <query>')
   .description('Search the knowledge graph')
-  .option('--fulltext', 'Use full-text search instead of semantic')
+  .option('--fulltext', 'Use SQLite FTS5 keyword search instead of semantic search')
   .option('--limit <n>', 'Max results', '20')
   .action(async (query, opts) => {
     const store = getStore();
