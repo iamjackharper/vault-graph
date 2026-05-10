@@ -14,6 +14,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "better-sqlite3": "^12.8.0",
+    "chokidar": "^5.0.0",
     "commander": "^14.0.3",
     "graphology": "^0.26.0",
     "graphology-communities-louvain": "^2.0.2",

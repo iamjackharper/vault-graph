@@ -35,6 +35,15 @@ function requireMatch(name: string): string {
   return matches[0].nodeId;
 }
 
+function resolveChunkDocument(document: string | undefined): string | undefined {
+  if (!document) return undefined;
+  if (document.startsWith('raw/') || document.startsWith('wiki/sources/')) {
+    return document.endsWith('.md') ? document : `${document}.md`;
+  }
+  if (store.getNode(document)) return document;
+  return requireMatch(document);
+}
+
 server.tool(
   'kg_index',
   'Parse vault and build/update the knowledge graph',
@@ -123,6 +132,26 @@ server.tool(
       if (!embedderReady) { await embedder.init(); embedderReady = true; }
       results = await search.semantic(query, limit ?? 20);
     }
+    return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
+  }
+);
+
+server.tool(
+  'kg_chunks',
+  'Semantic chunk search over raw files and wiki source notes',
+  {
+    query: z.string().describe('Search query'),
+    limit: z.number().optional().describe('Max results (default 10)'),
+    source: z.enum(['all', 'raw', 'wiki-sources']).optional().describe('Source filter (default all)'),
+    document: z.string().optional().describe('Restrict to a raw path or wiki source node'),
+  },
+  async ({ query, limit, source, document }) => {
+    if (!embedderReady) { await embedder.init(); embedderReady = true; }
+    const results = await search.chunks(query, {
+      limit: limit ?? 10,
+      sourceKind: !source || source === 'all' ? undefined : source,
+      documentId: resolveChunkDocument(document),
+    });
     return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
   }
 );

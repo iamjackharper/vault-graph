@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { Command } from 'commander';
 import { mkdirSync } from 'fs';
 import { resolveConfig } from '../lib/config.js';
@@ -7,6 +9,7 @@ import { IndexPipeline } from '../lib/index-pipeline.js';
 import { KnowledgeGraph } from '../lib/graph.js';
 import { Search } from '../lib/search.js';
 import { resolveNodeName } from '../lib/resolve.js';
+import { VaultWatcher } from '../lib/watcher.js';
 import type { ChunkSourceKind } from '../lib/types.js';
 
 const program = new Command();
@@ -34,6 +37,10 @@ function getStore() {
 
 function output(data: unknown) {
   console.log(JSON.stringify(data, null, 2));
+}
+
+function printJsonLine(event: string, data: Record<string, unknown>) {
+  console.log(JSON.stringify({ event, ...data }));
 }
 
 function requireSingleMatch(name: string, store: Store): string {
@@ -85,6 +92,45 @@ program
     output(stats);
     await embedder.dispose();
     store.close();
+  });
+
+program
+  .command('watch')
+  .description('Watch the vault and incrementally re-index when relevant Markdown files change')
+  .option('--resolution <number>', 'Louvain resolution parameter', '1.0')
+  .option('--debounce-ms <n>', 'Delay after file changes before indexing', '3000')
+  .option('--no-initial-index', 'Skip indexing immediately on startup')
+  .action(async (opts) => {
+    const config = getConfig();
+    mkdirSync(config.dataDir, { recursive: true });
+    const store = new Store(config.dbPath);
+    const embedder = new Embedder();
+    await embedder.init();
+    const pipeline = new IndexPipeline(store, embedder);
+    const resolution = parseFloat(opts.resolution);
+    const debounceMs = parseInt(opts.debounceMs);
+
+    const watcher = new VaultWatcher({
+      vaultPath: config.vaultPath,
+      debounceMs,
+      initialIndex: opts.initialIndex,
+      index: () => pipeline.index(config.vaultPath, resolution),
+      onIndexStart: reason => printJsonLine('index_start', { reason }),
+      onIndexComplete: stats => printJsonLine('index_complete', { stats }),
+      onError: error => printJsonLine('error', { message: error instanceof Error ? error.message : String(error) }),
+    });
+
+    const shutdown = async () => {
+      await watcher.stop();
+      await embedder.dispose();
+      store.close();
+      process.exit(0);
+    };
+    process.once('SIGINT', () => { void shutdown(); });
+    process.once('SIGTERM', () => { void shutdown(); });
+
+    await watcher.start();
+    printJsonLine('watching', { vaultPath: config.vaultPath, debounceMs });
   });
 
 program

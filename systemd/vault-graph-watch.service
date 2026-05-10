@@ -1,0 +1,18 @@
+[Unit]
+Description=Watch an Obsidian vault and keep vault-graph indexed
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__WORKING_DIRECTORY__
+EnvironmentFile=-__ENV_FILE__
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=KG_DATA_DIR=__DATA_DIR__
+Environment=VAULT_GRAPH_DEFAULT_VAULT_PATH=__DEFAULT_VAULT_PATH__
+ExecStart=/bin/bash -c 'set -euo pipefail; export KG_VAULT_PATH="${KG_VAULT_PATH:-${OBSIDIAN_VAULT_PATH:-${VAULT_GRAPH_DEFAULT_VAULT_PATH}}}"; exec vault-graph watch'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
