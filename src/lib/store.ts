@@ -438,8 +438,10 @@ export class Store {
 }
 
 function firstParagraph(content: string, maxLen: number): string {
-  const para = content.split(/\n\n+/).find(p => p.trim().length > 0 && !p.startsWith('#'));
+  const para = content
+    .split(/\n\n+/)
+    .map(p => p.trim())
+    .find(p => p.length > 0 && !p.startsWith('#') && p !== '---');
   if (!para) return '';
-  const trimmed = para.trim();
-  return trimmed.length > maxLen ? trimmed.slice(0, maxLen) + '...' : trimmed;
+  return para.length > maxLen ? para.slice(0, maxLen) + '...' : para;
 }
