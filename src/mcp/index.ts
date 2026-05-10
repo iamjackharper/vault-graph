@@ -9,6 +9,7 @@ import { KnowledgeGraph } from '../lib/graph.js';
 import { Search } from '../lib/search.js';
 import { resolveNodeName } from '../lib/resolve.js';
 import { VaultWriter } from '../lib/writer.js';
+import { buildBriefNodeResult, buildFullNodeResult } from '../lib/node-output.js';
 import { mkdirSync } from 'fs';
 
 const config = resolveConfig({});
@@ -58,7 +59,7 @@ server.tool(
 
 server.tool(
   'kg_node',
-  'Get a node. Brief mode (default) returns metadata + connection titles. Full mode returns content + edge context.',
+  'Get a node. Brief mode (default) returns metadata + connection titles. Full mode returns raw Markdown file content plus compact link summaries.',
   {
     name: z.string().describe('Node name (fuzzy matched)'),
     brief: z.boolean().optional().describe('Brief mode: metadata + connection titles only (default true)'),
@@ -71,33 +72,12 @@ server.tool(
     const useBrief = brief ?? true;
 
     if (useBrief) {
-      const outgoing = store.getEdgeSummariesFrom(nodeId);
-      const incoming = store.getEdgeSummariesTo(nodeId);
-      const result = {
-        id: node.id,
-        title: node.title,
-        frontmatter: node.frontmatter,
-        outgoingCount: store.countEdgesFrom(nodeId),
-        incomingCount: store.countEdgesTo(nodeId),
-        outgoing,
-        incoming,
-      };
+      const result = buildBriefNodeResult(store, node);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
 
-    const limit = maxContentLength ?? 2000;
-    const truncatedContent = node.content.length > limit
-      ? node.content.slice(0, limit) + `\n\n... [truncated, ${node.content.length} chars total]`
-      : node.content;
-    const outgoing = store.getEdgesFrom(nodeId).map(e => ({
-      ...e,
-      context: e.context.length > 200 ? e.context.slice(0, 200) + '...' : e.context,
-    }));
-    const incoming = store.getEdgesTo(nodeId).map(e => ({
-      ...e,
-      context: e.context.length > 200 ? e.context.slice(0, 200) + '...' : e.context,
-    }));
-    return { content: [{ type: 'text', text: JSON.stringify({ ...node, content: truncatedContent, outgoing, incoming }, null, 2) }] };
+    const result = buildFullNodeResult(store, node, config.vaultPath, maxContentLength ?? 6000);
+    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
   }
 );
 

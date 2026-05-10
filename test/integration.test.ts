@@ -8,6 +8,7 @@ import { IndexPipeline } from '../src/lib/index-pipeline.js';
 import { KnowledgeGraph } from '../src/lib/graph.js';
 import { Search } from '../src/lib/search.js';
 import { resolveNodeName } from '../src/lib/resolve.js';
+import { buildFullNodeResult } from '../src/lib/node-output.js';
 
 describe('Integration: full pipeline', () => {
   let store: Store;
@@ -57,6 +58,23 @@ describe('Integration: full pipeline', () => {
     expect(node!.title).toBe('Alice Smith');
     const outgoing = store.getEdgesFrom('wiki/People/Alice Smith.md');
     expect(outgoing.length).toBeGreaterThan(0);
+  });
+
+  it('full node output uses canonical markdown and compact links', () => {
+    const node = store.getNode('wiki/People/Alice Smith.md');
+    expect(node).toBeDefined();
+
+    const result = buildFullNodeResult(store, node!, fixtureVault, 2000);
+
+    expect(result.format).toBe('markdown');
+    expect(result.contentSource).toBe('vault-file');
+    expect(result.content).toContain('---\ntitle: Alice Smith');
+    expect(result.content).toContain('[[Widget Theory]]');
+    expect(result.outgoing).toEqual([
+      { nodeId: 'wiki/Concepts/Widget Theory.md', title: 'Widget Theory' },
+      { nodeId: 'wiki/Ideas/Acme Project.md', title: 'Acme Project' },
+    ]);
+    expect(JSON.stringify(result)).not.toContain('context');
   });
 
   it('excludes root, raw, and inbox notes from the operational graph', () => {

@@ -10,6 +10,7 @@ import { KnowledgeGraph } from '../lib/graph.js';
 import { Search } from '../lib/search.js';
 import { resolveNodeName } from '../lib/resolve.js';
 import { VaultWatcher } from '../lib/watcher.js';
+import { buildBriefNodeResult, buildFullNodeResult } from '../lib/node-output.js';
 import type { ChunkSourceKind } from '../lib/types.js';
 
 const program = new Command();
@@ -135,10 +136,11 @@ program
 
 program
   .command('node <name>')
-  .description('Get a node with its content and connections')
-  .option('--full', 'Return full content and edge context (default is brief)')
-  .option('--max-content <n>', 'Truncate content to N chars in full mode', '2000')
+  .description('Get a node from the canonical Obsidian vault')
+  .option('--full', 'Return raw Markdown file content plus compact link summaries (default is brief)')
+  .option('--max-content <n>', 'Truncate Markdown content to N chars in full mode', '6000')
   .action((name, opts) => {
+    const config = getConfig();
     const store = getStore();
     const nodeId = requireSingleMatch(name, store);
     const node = store.getNode(nodeId);
@@ -146,25 +148,9 @@ program
 
     if (opts.full) {
       const limit = parseInt(opts.maxContent);
-      const truncatedContent = node.content.length > limit
-        ? node.content.slice(0, limit) + `\n\n... [truncated, ${node.content.length} chars total]`
-        : node.content;
-      const outgoing = store.getEdgesFrom(nodeId).map(e => ({
-        ...e, context: e.context.length > 200 ? e.context.slice(0, 200) + '...' : e.context,
-      }));
-      const incoming = store.getEdgesTo(nodeId).map(e => ({
-        ...e, context: e.context.length > 200 ? e.context.slice(0, 200) + '...' : e.context,
-      }));
-      output({ ...node, content: truncatedContent, outgoing, incoming });
+      output(buildFullNodeResult(store, node, config.vaultPath, limit));
     } else {
-      const outgoing = store.getEdgeSummariesFrom(nodeId);
-      const incoming = store.getEdgeSummariesTo(nodeId);
-      output({
-        id: node.id, title: node.title, frontmatter: node.frontmatter,
-        outgoingCount: store.countEdgesFrom(nodeId),
-        incomingCount: store.countEdgesTo(nodeId),
-        outgoing, incoming,
-      });
+      output(buildBriefNodeResult(store, node));
     }
     store.close();
   });
