@@ -12,6 +12,7 @@
 #   VAULT_GRAPH_REMOTE_VAULT_PATH=/srv/obsidian-vault
 #   VAULT_GRAPH_REMOTE_DATA_DIR=/var/lib/vault-graph
 #   VAULT_GRAPH_VPS_SERVICE=vault-graph-watch.service
+#   VAULT_GRAPH_VPS_ALLOW_RESET=1
 
 set -euo pipefail
 
@@ -26,6 +27,7 @@ REMOTE_ENV_FILE="${VAULT_GRAPH_REMOTE_ENV_FILE:-/etc/vault-graph.env}"
 DEFAULT_VAULT_PATH="${VAULT_GRAPH_REMOTE_VAULT_PATH:-/srv/obsidian-vault}"
 DEFAULT_DATA_DIR="${VAULT_GRAPH_REMOTE_DATA_DIR:-/var/lib/vault-graph}"
 SERVICE_NAME="${VAULT_GRAPH_VPS_SERVICE:-vault-graph-watch.service}"
+ALLOW_RESET="${VAULT_GRAPH_VPS_ALLOW_RESET:-0}"
 
 if [ -z "$SSH_TARGET" ]; then
   echo "error: VAULT_GRAPH_VPS_SSH_TARGET is required (example: user@host)." >&2
@@ -84,7 +86,16 @@ ssh "${SSH_ARGS[@]}" "$SSH_TARGET" \
    cd '$REMOTE_REPO'
    echo 'Remote before:' \$(git rev-parse --short HEAD 2>/dev/null || echo none)
    git fetch origin
-   git pull --ff-only origin main
+   git checkout main
+   if git merge-base --is-ancestor HEAD origin/main; then
+     git pull --ff-only origin main
+   elif [ '$ALLOW_RESET' = '1' ]; then
+     echo 'Remote checkout diverged; resetting to origin/main'
+     git reset --hard origin/main
+   else
+     echo 'error: remote checkout diverged from origin/main. Re-run with VAULT_GRAPH_VPS_ALLOW_RESET=1 to hard reset the deployment checkout.' >&2
+     exit 1
+   fi
    npm ci
    npm run build
    npm link
