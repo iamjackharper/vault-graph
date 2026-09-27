@@ -141,6 +141,11 @@ The repo includes `skills/vault-research/SKILL.md`, a CLI-first workflow for age
 | MCP server | @modelcontextprotocol/sdk |
 | Tests | vitest |
 
+`better-sqlite3` 13 supports Node 22 and newer. Its native addon can be loaded
+by both Node 22 and Node 26, including when Hermes selects a different Node
+runtime for a tool invocation. After upgrading from `better-sqlite3` 12, run
+`npm ci` before starting `vault-graph`.
+
 ## Known quirks
 
 - **sqlite-vec requires BigInt rowids** when used with better-sqlite3.
